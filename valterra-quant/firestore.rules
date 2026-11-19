@@ -1,0 +1,262 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'photoURL', 'roleLabel', 'defaultCapital',
+          'onboardingCompleted', 'activePortfolioName', 'activeSector',
+          'activeTickers', 'activeWeights', 'activeRiskPreference',
+          'activeObjective', 'activeRange', 'createdAt', 'updatedAt'
+        ])
+        && data.uid is string
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 120
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 180
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('roleLabel' in data) || (data.roleLabel is string && data.roleLabel.size() >= 1 && data.roleLabel.size() <= 60))
+        && (!('defaultCapital' in data) || (data.defaultCapital is number && data.defaultCapital >= 0 && data.defaultCapital <= 1000000000))
+        && (!('onboardingCompleted' in data) || data.onboardingCompleted is bool)
+        && (!('activePortfolioName' in data) || (data.activePortfolioName is string && data.activePortfolioName.size() >= 1 && data.activePortfolioName.size() <= 100))
+        && (!('activeSector' in data) || (data.activeSector is string && data.activeSector in ['tecnologia', 'consumo', 'biotecnologia', 'mineria', 'bancario', 'multisector']))
+        && (!('activeTickers' in data) || (data.activeTickers is list && data.activeTickers.size() <= 12 && (data.activeTickers.size() == 0 || (data.activeTickers[0] is string && data.activeTickers[0].size() >= 1 && data.activeTickers[0].size() <= 16))))
+        && (!('activeWeights' in data) || (data.activeWeights is list && data.activeWeights.size() <= 12 && (data.activeWeights.size() == 0 || data.activeWeights[0] is number)))
+        && (!('activeRiskPreference' in data) || (data.activeRiskPreference is string && data.activeRiskPreference in ['conservador', 'moderado', 'agresivo']))
+        && (!('activeObjective' in data) || (data.activeObjective is string && data.activeObjective in ['maxSharpe', 'minRisk', 'custom']))
+        && (!('activeRange' in data) || (data.activeRange is string && data.activeRange in ['3mo', '6mo', '1y', '2y']))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPortfolio(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'sector', 'tickers', 'weights',
+          'sharpeRatio', 'weightedVariance', 'standardDeviation',
+          'expectedReturn', 'riskFreeRate', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'sector', 'tickers', 'weights',
+          'sharpeRatio', 'weightedVariance', 'standardDeviation',
+          'expectedReturn', 'riskFreeRate', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 100
+        && data.sector is string
+        && data.sector in ['tecnologia', 'consumo', 'biotecnologia', 'mineria', 'bancario', 'multisector']
+        && data.tickers is list
+        && data.tickers.size() >= 2
+        && data.tickers.size() <= 12
+        && data.tickers[0] is string
+        && data.tickers[0].size() >= 1
+        && data.tickers[0].size() <= 16
+        && data.weights is list
+        && data.weights.size() == data.tickers.size()
+        && data.weights[0] is number
+        && data.sharpeRatio is number
+        && data.weightedVariance is number
+        && data.weightedVariance >= 0
+        && data.standardDeviation is number
+        && data.standardDeviation >= 0
+        && data.expectedReturn is number
+        && data.riskFreeRate is number
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStressTest(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'portfolioName', 'sector', 'scenarioName',
+          'marketShockPct', 'volMultiplier', 'rateShiftBps',
+          'stressedReturn', 'stressedVolatility', 'stressedSharpe',
+          'var95', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'portfolioName', 'sector', 'scenarioName',
+          'marketShockPct', 'volMultiplier', 'rateShiftBps',
+          'stressedReturn', 'stressedVolatility', 'stressedSharpe',
+          'var95', 'createdAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.portfolioName is string
+        && data.portfolioName.size() >= 1
+        && data.portfolioName.size() <= 100
+        && data.sector is string
+        && data.sector.size() >= 1
+        && data.sector.size() <= 40
+        && data.scenarioName is string
+        && data.scenarioName.size() >= 1
+        && data.scenarioName.size() <= 100
+        && data.marketShockPct is number
+        && data.volMultiplier is number
+        && data.volMultiplier >= 0.1
+        && data.volMultiplier <= 10
+        && data.rateShiftBps is number
+        && data.stressedReturn is number
+        && data.stressedVolatility is number
+        && data.stressedVolatility >= 0
+        && data.stressedSharpe is number
+        && data.var95 is number
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSavedReport(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'reportType', 'reportFingerprint', 'portfolioName',
+          'sector', 'portfolioValue', 'tickers', 'weights', 'assetDetails',
+          'modelParams', 'metrics', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'reportType', 'reportFingerprint', 'portfolioName',
+          'sector', 'portfolioValue', 'tickers', 'weights', 'assetDetails',
+          'modelParams', 'stressParams', 'metrics', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.reportType is string
+        && data.reportType in ['financial_analysis', 'stress_test']
+        && data.reportFingerprint is string
+        && data.reportFingerprint.size() >= 4
+        && data.reportFingerprint.size() <= 128
+        && data.reportFingerprint.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.portfolioName is string
+        && data.portfolioName.size() >= 1
+        && data.portfolioName.size() <= 100
+        && data.sector is string
+        && data.sector in ['tecnologia', 'consumo', 'biotecnologia', 'mineria', 'bancario', 'multisector']
+        && data.portfolioValue is number
+        && data.portfolioValue >= 0
+        && data.portfolioValue <= 1000000000
+        && data.tickers is list
+        && data.tickers.size() >= 2
+        && data.tickers.size() <= 12
+        && data.tickers[0] is string
+        && data.tickers[0].size() >= 1
+        && data.tickers[0].size() <= 16
+        && data.weights is list
+        && data.weights.size() == data.tickers.size()
+        && data.weights[0] is number
+        && data.assetDetails is list
+        && data.assetDetails.size() == data.tickers.size()
+        && data.assetDetails[0] is map
+        && data.modelParams is map
+        && data.metrics is map
+        && (data.reportType != 'stress_test' || ('stressParams' in data && data.stressParams is map))
+        && (!('stressParams' in data) || data.stressParams is map)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'email', 'photoURL', 'roleLabel', 'defaultCapital',
+          'onboardingCompleted', 'activePortfolioName', 'activeSector',
+          'activeTickers', 'activeWeights', 'activeRiskPreference',
+          'activeObjective', 'activeRange', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /portfolios/{portfolioId} {
+        allow get: if isValidId(userId) && isValidId(portfolioId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(portfolioId)
+          && isOwner(userId)
+          && isValidPortfolio(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId)
+          && isValidId(portfolioId)
+          && isOwner(userId)
+          && isValidPortfolio(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'sector', 'tickers', 'weights',
+            'sharpeRatio', 'weightedVariance', 'standardDeviation',
+            'expectedReturn', 'riskFreeRate', 'updatedAt'
+          ]);
+        allow delete: if isValidId(userId) && isValidId(portfolioId) && isOwner(userId);
+      }
+
+      match /stressTests/{testId} {
+        allow get: if isValidId(userId) && isValidId(testId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(testId)
+          && isOwner(userId)
+          && isValidStressTest(incoming(), userId)
+          && incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(testId) && isOwner(userId);
+      }
+
+      match /reports/{reportId} {
+        allow get: if isValidId(userId) && isValidId(reportId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(reportId)
+          && isOwner(userId)
+          && isValidSavedReport(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(reportId) && isOwner(userId);
+      }
+    }
+  }
+}

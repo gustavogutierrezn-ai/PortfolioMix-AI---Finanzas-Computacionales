@@ -1,0 +1,6 @@
+{
+  "name": "Valterra Quant",
+  "description": "Plataforma financiera de optimización de carteras con Random Forest, correlación de Pearson, métricas de riesgo avanzadas y pruebas de estrés en tiempo real vía Yahoo Finance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
